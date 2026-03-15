@@ -67,7 +67,7 @@ def main():
                     except requests.RequestException as e:
                         st.sidebar.error(f"Ошибка при импорте CSV: {e}")
         except Exception as e:
-            st.sidebar.error(f"Не удалось прочитать CSV: {e}")}")
+            st.sidebar.error(f"Не удалось прочитать CSV: {e}")
 
     # --------- Блок CRUD (добавление / удаление) ---------
     st.sidebar.header("Управление записями")
