@@ -1,12 +1,12 @@
-# energy_dashboard/backend/routers.py
-
 from fastapi import APIRouter, HTTPException, status
 from typing import List
 
-from .schemas.records import RecordCreate, RecordRead          # было backend.schemas...
-from .repository.records import get_all_records, add_record, delete_record  # и тут тоже
+from .schemas.records import RecordCreate, RecordRead
+from .repository.records import get_all_records, add_record, delete_record
 
 router = APIRouter()
+# дальше ручки...
+
 
 @router.get("/", response_model=List[RecordRead])
 def list_records():
