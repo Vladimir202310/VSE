@@ -1,8 +1,13 @@
 from fastapi import APIRouter, HTTPException, status
 from typing import List
 
-from .schemas.records import RecordCreate, RecordRead
-from .repository.records import get_all_records, add_record, delete_record
+from energy_dashboard.backend.schemas.records import RecordCreate, RecordRead
+from energy_dashboard.backend.repository.records import (
+    get_all_records,
+    add_record,
+    delete_record,
+)
+
 
 router = APIRouter()
 # дальше ручки...
