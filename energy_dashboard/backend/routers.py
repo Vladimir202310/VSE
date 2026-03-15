@@ -25,3 +25,12 @@ def remove_record(record_id: int):
         raise HTTPException(status_code=404, detail="Record not found")
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to delete record")
+
+@router.post("/bulk", status_code=status.HTTP_201_CREATED)
+def bulk_import(records: List[RecordCreate]):
+    try:
+        for record in records:
+            add_record(record)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to bulk import records")
+    return {"detail": f"Imported {len(records)} records"}
