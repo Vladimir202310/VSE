@@ -30,6 +30,48 @@ def load_data():
 
 def main():
     st.title("Панель мониторинга энергопотребления")
+    
+    # --- Загрузка CSV с компьютера и отправка в backend ---
+    st.sidebar.header("Загрузка данных из CSV")
+    uploaded_file = st.sidebar.file_uploader("Выберите CSV файл", type="csv")
+
+    if uploaded_file is not None:
+        try:
+            df_upload = pd.read_csv(uploaded_file)
+            # Ожидаем, что в CSV есть нужные колонки:
+            needed_cols = {
+                "timestep",
+                "consumption_eur",
+                "consumption_sib",
+                "price_eur",
+                "price_sib",
+            }
+            if not needed_cols.issubset(df_upload.columns):
+                st.sidebar.error("В CSV нет всех необходимых колонок.")
+            else:
+                records = []
+                for _, row in df_upload.iterrows():
+                    records.append(
+                        {
+                            "timestep": pd.to_datetime(row["timestep"]).isoformat(),
+                            "consumption_eur": float(row["consumption_eur"]),
+                            "consumption_sib": float(row["consumption_sib"]),
+                            "price_eur": float(row["price_eur"]),
+                            "price_sib": float(row["price_sib"]),
+                        }
+                    )
+                if st.sidebar.button("Импортировать CSV в базу"):
+                    try:
+                        resp = requests.post(f"{API_URL}/bulk", json=records)
+                        resp.raise_for_status()
+                        st.sidebar.success(
+                            f"Импортировано записей: {len(records)}"
+                        )
+                        load_data.clear()
+                    except requests.RequestException as e:
+                        st.sidebar.error(f"Ошибка при импорте CSV: {e}")
+        except Exception as e:
+            st.sidebar.error(f"Не удалось прочитать CSV: {e}")
 
     # --------- Блок CRUD (добавление / удаление) ---------
     st.sidebar.header("Управление записями")
