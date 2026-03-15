@@ -93,6 +93,51 @@ def main():
         except Exception as e:
             st.sidebar.error(f"Не удалось прочитать CSV: {e}")
 
+    # --- Добавление одной записи вручную ---
+    st.sidebar.header("Добавить запись вручную")
+    with st.sidebar.form("add_record_form"):
+        ts = st.text_input("timestep (ISO 8601)", "")
+        cons_eur = st.number_input("consumption_eur", value=0.0)
+        cons_sib = st.number_input("consumption_sib", value=0.0)
+        price_eur = st.number_input("price_eur", value=0.0)
+        price_sib = st.number_input("price_sib", value=0.0)
+        submitted_add = st.form_submit_button("Добавить запись")
+
+    if submitted_add:
+        try:
+            payload = {
+                "timestep": pd.to_datetime(ts).isoformat(),
+                "consumption_eur": float(cons_eur),
+                "consumption_sib": float(cons_sib),
+                "price_eur": float(price_eur),
+                "price_sib": float(price_sib),
+            }
+            with st.spinner("Отправляю запись в базу..."):
+                resp = requests.post(API_URL, json=payload, timeout=10)
+                resp.raise_for_status()
+            st.sidebar.success("Запись добавлена")
+            load_data.clear()
+        except Exception as e:
+            st.sidebar.error(f"Не удалось добавить запись: {e}")
+
+    # --- Удаление записи по ID ---
+    st.sidebar.header("Удалить запись по ID")
+    del_id = st.sidebar.text_input("ID записи для удаления", "")
+    if st.sidebar.button("Удалить запись"):
+        if not del_id:
+            st.sidebar.error("Укажите ID записи.")
+        else:
+            try:
+                with st.spinner("Удаляю запись..."):
+                    resp = requests.delete(
+                        f"{API_URL}/{del_id}", timeout=10
+                    )
+                    resp.raise_for_status()
+                st.sidebar.success("Запись удалена")
+                load_data.clear()
+            except requests.RequestException as e:
+                st.sidebar.error(f"Не удалось удалить запись: {e}")
+
     # --- Основные данные и графики ---
     df = load_data()
 
