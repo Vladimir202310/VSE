@@ -1,8 +1,10 @@
+# energy_dashboard/backend/routers.py
+
 from fastapi import APIRouter, HTTPException, status
 from typing import List
 
-from backend.schemas.records import RecordCreate, RecordRead
-from backend.repository.records import get_all_records, add_record, delete_record
+from .schemas.records import RecordCreate, RecordRead          # было backend.schemas...
+from .repository.records import get_all_records, add_record, delete_record  # и тут тоже
 
 router = APIRouter()
 
@@ -34,3 +36,4 @@ def bulk_import(records: List[RecordCreate]):
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to bulk import records")
     return {"detail": f"Imported {len(records)} records"}
+
