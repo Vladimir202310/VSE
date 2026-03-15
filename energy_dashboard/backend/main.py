@@ -1,108 +1,52 @@
-from datetime import datetime
-from typing import List
+from fastapi import APIRouter, HTTPException, status
+from typing import List, Dict
+import logging
 
-from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel
-from sqlalchemy import Column, Integer, Float, DateTime, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from backend.schemas.records import RecordCreate, RecordRead
+from backend.repository.records import get_all_records, add_record, delete_record
 
-# ---------- Настройки БД ----------
-
-SQLALCHEMY_DATABASE_URL = "sqlite:///./energy.db"  # если у тебя другой путь/БД — подставь свой
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False}  # для sqlite
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
+logger = logging.getLogger(__name__)
+router = APIRouter()
 
 
-# ---------- SQLAlchemy-модель ----------
-
-class EnergyRecord(Base):
-    __tablename__ = "energy_records"
-
-    id = Column(Integer, primary_key=True, index=True)
-    timestep = Column(DateTime, index=True)          # из столбца timestep
-    consumption_eur = Column(Float)                  # из consumption_eur
-    consumption_sib = Column(Float)                  # из consumption_sib
-    price_eur = Column(Float)                        # из price_eur
-    price_sib = Column(Float)                        # из price_sib
-
-
-# ---------- Pydantic-схемы ----------
-
-class EnergyRecordBase(BaseModel):
-    timestep: datetime
-    consumption_eur: float
-    consumption_sib: float
-    price_eur: float
-    price_sib: float
-
-
-class EnergyRecordCreate(EnergyRecordBase):
-    pass
-
-
-class EnergyRecordRead(EnergyRecordBase):
-    id: int
-
-    class Config:
-        from_attributes = True  # важно для работы с ORM [web:243][web:272]
-
-
-# ---------- Инициализация БД ----------
-
-def init_db():
-    Base.metadata.create_all(bind=engine)
-
-
-# ---------- Зависимость для сессии БД ----------
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-# ---------- Приложение FastAPI ----------
-
-app = FastAPI()
-
-init_db()
-
-
-# ---------- Эндпоинты ----------
-
-@app.get("/records", response_model=List[EnergyRecordRead])
-def read_records(db: Session = Depends(get_db)):
-    records = db.query(EnergyRecord).all()
+@router.get("/", response_model=List[RecordRead])
+def list_records():
+    records = get_all_records()
+    if records is None:
+        return []
     return records
 
 
+@router.post("/", response_model=RecordRead, status_code=status.HTTP_201_CREATED)
+def create_record(record: RecordCreate):
+    try:
+        return add_record(record)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in create_record: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save record")
 
-@app.get("/records/{record_id}", response_model=EnergyRecordRead)
-def read_record(record_id: int, db: Session = Depends(get_db)):
-    record = db.query(EnergyRecord).filter(EnergyRecord.id == record_id).first()
-    if record is None:
+
+@router.delete("/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_record(record_id: int):
+    try:
+        delete_record(record_id)
+    except KeyError:
         raise HTTPException(status_code=404, detail="Record not found")
-    return record
+    except Exception as e:
+        logger.error(f"Error deleting record {record_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete record")
 
 
-@app.post("/records", response_model=EnergyRecordRead)
-def create_record(record: EnergyRecordCreate, db: Session = Depends(get_db)):
-    db_record = EnergyRecord(
-        timestep=record.timestep,
-        consumption_eur=record.consumption_eur,
-        consumption_sib=record.consumption_sib,
-        price_eur=record.price_eur,
-        price_sib=record.price_sib,
-    )
-    db.add(db_record)
-    db.commit()
-    db.refresh(db_record)
-    return db_record
+@router.post("/bulk", response_model=Dict, status_code=status.HTTP_201_CREATED)
+def bulk_import(records: List[RecordCreate]) -> Dict:
+    try:
+        added_count = 0
+        for record in records:
+            add_record(record)
+            added_count += 1
+        return {"detail": f"Imported {added_count} records"}
+    except Exception as e:
+        logger.error(f"Bulk import failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to bulk import records")
