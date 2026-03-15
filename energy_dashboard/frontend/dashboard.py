@@ -4,7 +4,7 @@ import streamlit as st
 from datetime import datetime
 
 
-API_URL = "http://127.0.0.1:8000/records"
+API_URL = "https://vse-fastapi.onrender.com/records"
 
 st.set_page_config(
     page_title="Energy Dashboard",
