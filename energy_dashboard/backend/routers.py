@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from typing import List
 
-from .schemas.records import RecordCreate, RecordRead  # было: from backend.schemas
+from schemas import RecordCreate, RecordRead  # было: from backend.schemas
 from .repository.records import (  # было: from backend.repository
     get_all_records,
     add_record,
