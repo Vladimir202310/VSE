@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import List
 import pandas as pd
 
-from ..schemas.records import RecordCreate, RecordRead
+from schemas import RecordCreate, RecordRead
 
 DATA_PATH = Path("data/energy.csv")
 COLUMNS = [
