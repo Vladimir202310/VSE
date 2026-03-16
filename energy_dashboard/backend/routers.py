@@ -1,13 +1,12 @@
 from fastapi import APIRouter, HTTPException, status
 from typing import List
 
-from backend.schemas.records import RecordCreate, RecordRead
-from backend.repository.records import (
+from .schemas.records import RecordCreate, RecordRead  # было: from backend.schemas
+from .repository.records import (  # было: from backend.repository
     get_all_records,
     add_record,
     delete_record,
 )
-
 
 
 router = APIRouter()
