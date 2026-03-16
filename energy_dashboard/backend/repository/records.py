@@ -2,11 +2,17 @@ from pathlib import Path
 from typing import List
 import pandas as pd
 
-from ..schemas.records import RecordCreate, RecordRead  # было: from backend.schemas
-# ДВЕ точки (..), потому что schemas на уровень выше от repository
+from ..schemas.records import RecordCreate, RecordRead
 
 DATA_PATH = Path("data/energy.csv")
-COLUMNS = ["id", "time", "consumption_eu", "consumption_as", "price_eu", "price_as"]
+COLUMNS = [
+    "id",
+    "timestep",
+    "consumption_eur",
+    "consumption_sib",
+    "price_eur",
+    "price_sib",
+]
 
 
 def _load_df() -> pd.DataFrame:
@@ -15,7 +21,11 @@ def _load_df() -> pd.DataFrame:
         df.to_csv(DATA_PATH, index=False)
         return df
     df = pd.read_csv(DATA_PATH)
-    return df
+    # На всякий случай гарантируем наличие всех колонок
+    for col in COLUMNS:
+        if col not in df.columns:
+            df[col] = pd.NA
+    return df[COLUMNS]
 
 
 def _save_df(df: pd.DataFrame) -> None:
@@ -28,14 +38,15 @@ def get_all_records() -> List[RecordRead]:
         return []
     if "id" in df.columns:
         df["id"] = df["id"].astype(int)
+
     records = [
         RecordRead(
             id=int(row["id"]),
-            time=row["time"],
-            consumption_eu=row["consumption_eu"],
-            consumption_as=row["consumption_as"],
-            price_eu=row["price_eu"],
-            price_as=row["price_as"],
+            timestep=row["timestep"],
+            consumption_eur=row["consumption_eur"],
+            consumption_sib=row["consumption_sib"],
+            price_eur=row["price_eur"],
+            price_sib=row["price_sib"],
         )
         for _, row in df.iterrows()
     ]
@@ -45,14 +56,16 @@ def get_all_records() -> List[RecordRead]:
 def add_record(data: RecordCreate) -> RecordRead:
     df = _load_df()
     new_id = 1 if df.empty else int(df["id"].max()) + 1
+
     new_row = {
         "id": new_id,
-        "time": data.time,
-        "consumption_eu": data.consumption_eu,
-        "consumption_as": data.consumption_as,
-        "price_eu": data.price_eu,
-        "price_as": data.price_as,
+        "timestep": data.timestep,
+        "consumption_eur": data.consumption_eur,
+        "consumption_sib": data.consumption_sib,
+        "price_eur": data.price_eur,
+        "price_sib": data.price_sib,
     }
+
     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
     _save_df(df)
     return RecordRead(**new_row)
@@ -67,3 +80,4 @@ def delete_record(record_id: int) -> None:
         raise KeyError("Record not found")
     df = df[mask]
     _save_df(df)
+
