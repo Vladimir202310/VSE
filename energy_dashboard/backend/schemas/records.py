@@ -14,4 +14,3 @@ class DeleteResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = Field(..., description="Статус сервиса")
-
