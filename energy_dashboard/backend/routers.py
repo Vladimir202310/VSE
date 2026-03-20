@@ -1,62 +1,77 @@
-from typing import List
-
 from fastapi import APIRouter, HTTPException, status
 
-from .main import Record, RecordCreate
-from ..repository.records import RecordsRepository
+from .main import Record, RecordCreate, RecordsResponse
+from .records import ErrorResponse, DeleteResponse
+from ..repository.storage import (
+    get_all_records,
+    add_record,
+    delete_record_by_id,
+    RecordNotFoundError,
+)
 
 router = APIRouter(prefix="/records", tags=["records"])
-repo = RecordsRepository()
 
 
-@router.get("/", response_model=List[Record])
-def get_records():
+@router.get(
+    "",
+    response_model=RecordsResponse,
+    responses={500: {"model": ErrorResponse}},
+)
+def read_records():
     try:
-        raw = repo.get_all()
-        return raw
-    except Exception as e:
+        records = get_all_records()
+        return RecordsResponse(records=records)
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to load records: {e}",
+            detail=f"Ошибка при чтении данных: {exc}",
         )
 
 
-@router.post("/", response_model=Record, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=Record,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
 def create_record(record: RecordCreate):
     try:
-        # Pydantic уже провалидировал данные
-        rec_dict = record.dict()
-        created = repo.add_record(
-            {
-                "time": rec_dict["time"].isoformat(),
-                "consumption_eu": rec_dict["consumption_eu"],
-                "consumption_asia": rec_dict["consumption_asia"],
-                "price_eu": rec_dict["price_eu"],
-                "price_asia": rec_dict["price_asia"],
-            }
+        new_record = add_record(record)
+        return new_record
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
         )
-        return created
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create record: {e}",
+            detail=f"Ошибка при добавлении записи: {exc}",
         )
 
 
-@router.delete("/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{record_id}",
+    response_model=DeleteResponse,
+    responses={
+        404: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+)
 def delete_record(record_id: int):
     try:
-        ok = repo.delete_record(record_id)
-        if not ok:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Record with id={record_id} not found",
-            )
-        return
-    except HTTPException:
-        raise
-    except Exception as e:
+        delete_record_by_id(record_id)
+        return DeleteResponse(success=True, id=record_id)
+    except RecordNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        )
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete record: {e}",
+            detail=f"Ошибка при удалении записи: {exc}",
         )
