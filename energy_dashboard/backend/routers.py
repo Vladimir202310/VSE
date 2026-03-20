@@ -1,44 +1,62 @@
-from fastapi import APIRouter, HTTPException, status
 from typing import List
 
-from schemas import RecordCreate, RecordRead  # было: from backend.schemas
-from .repository.records import (  # было: from backend.repository
-    get_all_records,
-    add_record,
-    delete_record,
-)
+from fastapi import APIRouter, HTTPException, status
+
+from .main import Record, RecordCreate
+from ..repository.records import RecordsRepository
+
+router = APIRouter(prefix="/records", tags=["records"])
+repo = RecordsRepository()
 
 
-router = APIRouter()
-# дальше ручки...
+@router.get("/", response_model=List[Record])
+def get_records():
+    try:
+        raw = repo.get_all()
+        return raw
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load records: {e}",
+        )
 
 
-@router.get("/", response_model=List[RecordRead])
-def list_records():
-    return get_all_records()
-
-@router.post("/", response_model=RecordRead, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=Record, status_code=status.HTTP_201_CREATED)
 def create_record(record: RecordCreate):
     try:
-        return add_record(record)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to save record")
+        # Pydantic уже провалидировал данные
+        rec_dict = record.dict()
+        created = repo.add_record(
+            {
+                "time": rec_dict["time"].isoformat(),
+                "consumption_eu": rec_dict["consumption_eu"],
+                "consumption_asia": rec_dict["consumption_asia"],
+                "price_eu": rec_dict["price_eu"],
+                "price_asia": rec_dict["price_asia"],
+            }
+        )
+        return created
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create record: {e}",
+        )
+
 
 @router.delete("/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_record(record_id: int):
+def delete_record(record_id: int):
     try:
-        delete_record(record_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Record not found")
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to delete record")
-
-@router.post("/bulk", status_code=status.HTTP_201_CREATED)
-def bulk_import(records: List[RecordCreate]):
-    try:
-        for record in records:
-            add_record(record)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to bulk import records")
-    return {"detail": f"Imported {len(records)} records"}
-
+        ok = repo.delete_record(record_id)
+        if not ok:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Record with id={record_id} not found",
+            )
+        return
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete record: {e}",
+        )
