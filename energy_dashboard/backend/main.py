@@ -1,39 +1,60 @@
-from datetime import datetime
-from typing import Optional, List
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List
+import pandas as pd
+from pathlib import Path
 
-from pydantic import BaseModel, Field, validator
+from .schemas.main import RecordBase, RecordCreate, RecordRead
+from .schemas.records import RecordsRepository
 
+app = FastAPI(title="Energy Dashboard API")
 
-class RecordBase(BaseModel):
-    timestamp: datetime = Field(..., description="Временная метка")
-    consumption_eu: float = Field(..., ge=0, description="Потребление энергии в европейской части")
-    consumption_as: float = Field(..., ge=0, description="Потребление энергии в азиатской части")
-    price_eu: float = Field(..., ge=0, description="Цена в европейской части")
-    price_as: float = Field(..., ge=0, description="Цена в азиатской части")
+BASE_DIR = Path(__file__).resolve().parent
+DATA_PATH = BASE_DIR / "data" / "data.csv"
 
-    @validator("timestamp", pre=True)
-    def parse_timestamp(cls, v):
-        if isinstance(v, datetime):
-            return v
-        # CSV может хранить дату как строку
-        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
-            try:
-                return datetime.strptime(v, fmt)
-            except Exception:
-                continue
-        raise ValueError("Неверный формат даты")
+repo = RecordsRepository(csv_path=DATA_PATH)
 
-
-class RecordCreate(RecordBase):
-    pass
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-class Record(RecordBase):
-    id: int = Field(..., ge=0, description="Уникальный идентификатор записи")
+@app.on_event("startup")
+def startup_event():
+    try:
+        repo.load()
+    except Exception as exc:
+        raise RuntimeError(f"Failed to load data: {exc}")
 
-    class Config:
-        orm_mode = True
+
+@app.get("/records", response_model=List[RecordRead])
+def get_records():
+    return repo.get_all()
 
 
-class RecordsResponse(BaseModel):
-    records: List[Record]
+@app.post("/records", response_model=RecordRead, status_code=201)
+def create_record(record: RecordCreate):
+    try:
+        created = repo.add(record)
+        repo.save()
+        return created
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
+
+
+@app.delete("/records/{record_id}", status_code=204)
+def delete_record(record_id: int):
+    try:
+        repo.delete(record_id)
+        repo.save()
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Record with given id not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
+    return
