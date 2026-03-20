@@ -1,83 +1,67 @@
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+
 import pandas as pd
 
-from schemas import RecordCreate, RecordRead
-
-DATA_PATH = Path("data/energy.csv")
-COLUMNS = [
-    "id",
-    "timestep",
-    "consumption_eur",
-    "consumption_sib",
-    "price_eur",
-    "price_sib",
-]
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+CSV_PATH = DATA_DIR / "energy.csv"
 
 
-def _load_df() -> pd.DataFrame:
-    if not DATA_PATH.exists():
-        df = pd.DataFrame(columns=COLUMNS)
-        df.to_csv(DATA_PATH, index=False)
+class RecordsRepository:
+    def __init__(self, csv_path: Path = CSV_PATH):
+        self.csv_path = csv_path
+        self._ensure_file_exists()
+
+    def _ensure_file_exists(self) -> None:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        if not self.csv_path.exists():
+            # Создаём пустой CSV с правильными столбцами
+            df = pd.DataFrame(
+                columns=[
+                    "id",
+                    "time",
+                    "consumption_eu",
+                    "consumption_asia",
+                    "price_eu",
+                    "price_asia",
+                ]
+            )
+            df.to_csv(self.csv_path, index=False)
+
+    def _read_df(self) -> pd.DataFrame:
+        df = pd.read_csv(self.csv_path)
+        if "id" not in df.columns:
+            raise ValueError("CSV must contain 'id' column")
         return df
-    df = pd.read_csv(DATA_PATH)
-    # На всякий случай гарантируем наличие всех колонок
-    for col in COLUMNS:
-        if col not in df.columns:
-            df[col] = pd.NA
-    return df[COLUMNS]
 
+    def _write_df(self, df: pd.DataFrame) -> None:
+        df.to_csv(self.csv_path, index=False)
 
-def _save_df(df: pd.DataFrame) -> None:
-    df.to_csv(DATA_PATH, index=False)
+    def get_all(self) -> List[dict]:
+        df = self._read_df()
+        return df.to_dict(orient="records")
 
+    def get_next_id(self) -> int:
+        df = self._read_df()
+        if df.empty:
+            return 1
+        return int(df["id"].max()) + 1
 
-def get_all_records() -> List[RecordRead]:
-    df = _load_df()
-    if df.empty:
-        return []
-    if "id" in df.columns:
-        df["id"] = df["id"].astype(int)
+    def add_record(self, record: dict) -> dict:
+        df = self._read_df()
+        record_with_id = {**record, "id": self.get_next_id()}
+        df = pd.concat([df, pd.DataFrame([record_with_id])], ignore_index=True)
+        self._write_df(df)
+        return record_with_id
 
-    records = [
-        RecordRead(
-            id=int(row["id"]),
-            timestep=row["timestep"],
-            consumption_eur=row["consumption_eur"],
-            consumption_sib=row["consumption_sib"],
-            price_eur=row["price_eur"],
-            price_sib=row["price_sib"],
-        )
-        for _, row in df.iterrows()
-    ]
-    return records
+    def delete_record(self, record_id: int) -> bool:
+        df = self._read_df()
+        before = len(df)
+        df = df[df["id"] != record_id]
+        after = len(df)
+        if before == after:
+            return False
+        self._write_df(df)
+        return True
 
-
-def add_record(data: RecordCreate) -> RecordRead:
-    df = _load_df()
-    new_id = 1 if df.empty else int(df["id"].max()) + 1
-
-    new_row = {
-        "id": new_id,
-        "timestep": data.timestep,
-        "consumption_eur": data.consumption_eur,
-        "consumption_sib": data.consumption_sib,
-        "price_eur": data.price_eur,
-        "price_sib": data.price_sib,
-    }
-
-    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
-    _save_df(df)
-    return RecordRead(**new_row)
-
-
-def delete_record(record_id: int) -> None:
-    df = _load_df()
-    if df.empty:
-        raise KeyError("Record not found")
-    mask = df["id"] != record_id
-    if mask.all():
-        raise KeyError("Record not found")
-    df = df[mask]
-    _save_df(df)
 
