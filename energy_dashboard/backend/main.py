@@ -1,22 +1,27 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel, Field, validator
 
 
 class RecordBase(BaseModel):
-    time: datetime = Field(..., description="Время измерения")
-    consumption_eu: float = Field(..., ge=0)
-    consumption_asia: float = Field(..., ge=0)
-    price_eu: float = Field(..., ge=0)
-    price_asia: float = Field(..., ge=0)
+    timestamp: datetime = Field(..., description="Временная метка")
+    consumption_eu: float = Field(..., ge=0, description="Потребление энергии в европейской части")
+    consumption_as: float = Field(..., ge=0, description="Потребление энергии в азиатской части")
+    price_eu: float = Field(..., ge=0, description="Цена в европейской части")
+    price_as: float = Field(..., ge=0, description="Цена в азиатской части")
 
-    @validator("time", pre=True)
-    def parse_time(cls, v):
-        # допускаем строку из CSV
-        if isinstance(v, str):
-            return datetime.fromisoformat(v)
-        return v
+    @validator("timestamp", pre=True)
+    def parse_timestamp(cls, v):
+        if isinstance(v, datetime):
+            return v
+        # CSV может хранить дату как строку
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(v, fmt)
+            except Exception:
+                continue
+        raise ValueError("Неверный формат даты")
 
 
 class RecordCreate(RecordBase):
@@ -24,7 +29,12 @@ class RecordCreate(RecordBase):
 
 
 class Record(RecordBase):
-    id: int
+    id: int = Field(..., ge=0, description="Уникальный идентификатор записи")
 
     class Config:
         orm_mode = True
+
+
+class RecordsResponse(BaseModel):
+    records: List[Record]
+
