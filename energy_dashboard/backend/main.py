@@ -37,4 +37,3 @@ class Record(RecordBase):
 
 class RecordsResponse(BaseModel):
     records: List[Record]
-
