@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  postgres_db:  # Изменили имя сервиса для соответствия коннекту
+    image: postgres:15
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow-webserver:
+    build: .
+    container_name: airflow_webserver
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres_db:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__WEBSERVER__SECRET_KEY: supersecret123
+      SPARK_HOME: /opt/spark
+      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
+      PYSPARK_PYTHON: python3
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./sql:/opt/airflow/sql
+      - ./team_11:/opt/airflow/data/team_11
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "airflow db init && 
+      airflow users create --username admin --firstname admin --lastname admin --role Admin --email admin@example.com --password admin || true && 
+      airflow webserver"
+
+  airflow-scheduler:
+    build: .
+    container_name: airflow_scheduler
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres_db:5432/airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__WEBSERVER__SECRET_KEY: supersecret123
+      SPARK_HOME: /opt/spark
+      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
+      PYSPARK_PYTHON: python3
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./sql:/opt/airflow/sql
+      - ./team_11:/opt/airflow/data/team_11
+    command: bash -c "airflow scheduler"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres_db
+
+volumes:
+  pgadmin_data:
